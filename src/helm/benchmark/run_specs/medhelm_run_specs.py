@@ -1,8 +1,6 @@
-from helm.benchmark.adaptation.adapter_spec import (
-    ADAPT_GENERATION,
-    AdapterSpec,
-)
+from helm.benchmark.adaptation.adapter_spec import ADAPT_GENERATION, AdapterSpec
 from helm.benchmark.adaptation.common_adapter_specs import (
+    get_generation_adapter_spec,
     get_multiple_choice_joint_adapter_spec,
 )
 from helm.benchmark.metrics.common_metric_specs import (
@@ -10,7 +8,7 @@ from helm.benchmark.metrics.common_metric_specs import (
     get_exact_match_metric_specs,
     get_generic_metric_specs,
     get_open_ended_generation_metric_specs,
-    get_summarization_metric_specs
+    get_summarization_metric_specs,
 )
 from helm.benchmark.run_spec import RunSpec, run_spec_function
 from helm.benchmark.scenarios.scenario import ScenarioSpec
@@ -56,22 +54,23 @@ def get_head_qa_run_spec() -> RunSpec:
         groups=["biomedical", "head_qa"],
     )
 
-@run_spec_function("medbullet")
-def get_medbullet_run_spec() -> RunSpec:
+
+@run_spec_function("medbullets")
+def get_medbullets_run_spec() -> RunSpec:
     """
-    RunSpec for the MedBullet dataset.
+    RunSpec for the MedBullets dataset.
     This configuration evaluates the model's ability to answer challenging multiple-choice clinical questions.
     """
     # Define the scenario
     scenario_spec = ScenarioSpec(
-        class_name="helm.benchmark.scenarios.medbullet.MedBulletScenario",
+        class_name="helm.benchmark.scenarios.medbullets_scenario.MedBulletsScenario",
         args={},
     )
 
     # Define the adapter
     adapter_spec = get_multiple_choice_joint_adapter_spec(
         instructions=(
-            "You are a helpful AI Assistant specializing in Medicine. You are a highly knowledgeable AI assistant specializing in medicine. "
+            "You are a helpful and highly knowledgeable AI assistant specializing in medicine. "
             "Your task is to answer medical questions similar to those found on the USMLE Step 2/3 exams. You will be provided with a clinical scenario, "
             "followed by several multiple-choice options.\n\n"
             "For each question, you must:\n"
@@ -87,17 +86,55 @@ def get_medbullet_run_spec() -> RunSpec:
 
     # Define the metrics
     # get_exact_match_metric_specs - multiple choice exact match (accuracy)
-    # get_open_ended_generation_metric_specs - ["exact_match", "quasi_exact_match", "f1_score", "rouge_l", "bleu_1", "bleu_4"] bertscore
     metric_specs = get_exact_match_metric_specs()
 
     # Return the RunSpec
     return RunSpec(
-        name="medbullet",
+        name="medbullets",
         scenario_spec=scenario_spec,
         adapter_spec=adapter_spec,
         metric_specs=metric_specs,
-        groups=["clinical", "medbullet"],
+        groups=["clinical", "medbullets"],
     )
+
+
+@run_spec_function("medbullets_freetext")
+def get_medbullets_freetext_run_spec() -> RunSpec:
+    """RunSpec for the MedBullets Free-text dataset."""
+    # Define the scenario
+    scenario_spec = ScenarioSpec(
+        class_name="helm.benchmark.scenarios.medbullets_scenario.MedBulletsFreeTextScenario",
+        args={},
+    )
+
+    # Define the adapter
+    adapter_spec = get_generation_adapter_spec(
+        instructions=(
+            "You are a helpful and highly knowledgeable AI assistant specializing in medicine. "
+            "Your task is to answer medical questions similar to those found on the USMLE Step 2/3 exams. You will be provided with a clinical scenario, "
+            "and for each question, you must:\n"
+            "- Provide an answer to the question.\n"
+            "- Give a concise explanation for why that answer is correct, based on the clinical scenario provided."
+        ),
+        input_noun="Clinical Scenario",
+        output_noun="Answer",
+        # NOTE: Setting a high max-tokens yield errors with small models (e.g.: gpt2)
+        max_tokens=5000,
+    )
+
+    # Define the metrics
+    # get_open_ended_generation_metric_specs - ["exact_match", "quasi_exact_match", "f1_score", "rouge_l", "bleu_1", "bleu_4"] bertscore
+    metric_specs = get_open_ended_generation_metric_specs()
+
+    # Return the RunSpec
+    return RunSpec(
+        name="medbullets-freetext",
+        scenario_spec=scenario_spec,
+        adapter_spec=adapter_spec,
+        metric_specs=metric_specs,
+        groups=["clinical", "medbullets-freetext"],
+    )
+
 
 @run_spec_function("aci_bench")
 def get_aci_bench_run_spec() -> RunSpec:
@@ -107,7 +144,7 @@ def get_aci_bench_run_spec() -> RunSpec:
     """
     # Define the scenario
     scenario_spec = ScenarioSpec(
-        class_name="helm.benchmark.scenarios.aci_bench.ACIBenchScenario",
+        class_name="helm.benchmark.scenarios.aci_bench_scenario.ACIBenchScenario",
         args={},
     )
 
@@ -119,7 +156,6 @@ def get_aci_bench_run_spec() -> RunSpec:
             "2. PHYSICAL EXAM\n"
             "3. RESULTS\n"
             "4. ASSESSMENT AND PLAN\n\n"
-            "The conversation is:"
         ),
         max_tokens=5000,  # Limit token count to ensure concise output
         input_noun="Conversation",
@@ -140,6 +176,7 @@ def get_aci_bench_run_spec() -> RunSpec:
         groups=["clinical", "aci_bench"],
     )
 
+
 @run_spec_function("head_qa_json")
 def get_head_qa_run_spec_json() -> RunSpec:
     """
@@ -148,7 +185,7 @@ def get_head_qa_run_spec_json() -> RunSpec:
     """
     # Define the scenario
     scenario_spec = ScenarioSpec(
-        class_name="helm.benchmark.scenarios.headqa.HeadQAScenario",
+        class_name="helm.benchmark.scenarios.headqa_scenario.HeadQAScenario",
         args={},
     )
 
