@@ -9,9 +9,11 @@ from helm.benchmark.metrics.common_metric_specs import (
     get_generic_metric_specs,
     get_open_ended_generation_metric_specs,
     get_summarization_metric_specs,
+    get_basic_metric_specs
 )
 from helm.benchmark.run_spec import RunSpec, run_spec_function
 from helm.benchmark.scenarios.scenario import ScenarioSpec
+from helm.benchmark.metrics.metric import MetricSpec
 
 
 @run_spec_function("head_qa")
@@ -177,46 +179,47 @@ def get_aci_bench_run_spec() -> RunSpec:
     )
 
 
-@run_spec_function("head_qa_json")
-def get_head_qa_run_spec_json() -> RunSpec:
+@run_spec_function("medec")
+def get_medec_run_spec() -> RunSpec:
     """
-    RunSpec for the HEAD-QA dataset. Output in json format
-    This configuration evaluates the model's ability to answer challenging multiple-choice biomedical questions.
+    RunSpec for the MEDEC dataset.
+    This configuration evaluates the model's ability to summarize doctor-patient dialogues into structured clinical notes.
     """
     # Define the scenario
     scenario_spec = ScenarioSpec(
-        class_name="helm.benchmark.scenarios.headqa_scenario.HeadQAScenario",
+        class_name="helm.benchmark.scenarios.medec_scenario.MedecScenario",
         args={},
     )
 
     # Define the adapter
-    adapter_spec = get_multiple_choice_joint_adapter_spec(
+    adapter_spec = get_generation_adapter_spec(
         instructions=(
-            "You are a highly knowledgeable AI assistant specializing in biomedical sciences. Your task is to answer "
-            "multiple-choice questions accurately based on the options provided. Each question will relate to biomedical concepts, "
-            "and you will be asked to choose the most appropriate answer.\n\n"
-            "For each question, you must:\n"
-            "- Select the correct answer index (1 for A, 2 for B, 3 for C, 4 for D, etc).\n"
-            "- Provide the actual answer corresponding to the correct option.\n\n"
-            "Please think step-by-step to solve the question and then generate the required score. "
-            "Your output should contain the step-by-step thinking and the final answer, which is a short and direct answer to the question. "
-            'Before giving the final answer, write "Final Answer: " followed by the answer.\n\n'
-            "Output the result in JSON machine-readable format using these keys:\n"
-            "- `answer_idx`: the index corresponding to the chosen answer.\n"
-            "- `answer`: the actual answer text corresponding to the index."
+            "The following is a medical narrative about a patient. You are a skilled medical doctor reviewing the clinical text. "
+            "The text is either correct or contains one error. The text has a sentence per line. Each line starts with the "
+            "sentence ID, followed by a space character then the sentence to check. Check every sentence of the text. "
+            "If the text is correct return the following output: CORRECT. If the text has a medical error, return the "
+            "sentence ID of the sentence containing the error, followed by a space, and a corrected version of the sentence."
         ),
-        input_noun="Question",
-        output_noun="Answer",
+        max_tokens=5000,  # Limit token count to ensure concise output
+        input_noun="Conversation",
+        output_noun="Clinical Note",
+        max_train_instances = 10,
+        num_outputs = 10
     )
 
     # Define the metrics
-    metric_specs = get_exact_match_metric_specs() + get_generic_metric_specs()
+    metric_specs = [
+        MetricSpec(
+            class_name="helm.benchmark.metrics.medec_metrics.MedecMetric",
+            args={},
+        )
+    ] + get_basic_metric_specs([])
 
     # Return the RunSpec
     return RunSpec(
-        name="head_qa",
+        name="medec",
         scenario_spec=scenario_spec,
         adapter_spec=adapter_spec,
         metric_specs=metric_specs,
-        groups=["biomedical", "head_qa"],
+        groups=["clinical", "medec"],
     )
