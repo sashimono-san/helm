@@ -1,3 +1,5 @@
+from typing import Union
+
 from helm.benchmark.adaptation.adapter_spec import ADAPT_GENERATION, AdapterSpec
 from helm.benchmark.adaptation.common_adapter_specs import (
     get_generation_adapter_spec,
@@ -17,15 +19,17 @@ from helm.benchmark.metrics.metric import MetricSpec
 
 
 @run_spec_function("head_qa")
-def get_head_qa_run_spec() -> RunSpec:
+def get_head_qa_run_spec(
+    language: str = "en", category: Union[str, None] = None
+) -> RunSpec:
     """
     RunSpec for the HEAD-QA dataset.
     This configuration evaluates the model's ability to answer challenging multiple-choice biomedical questions.
     """
     # Define the scenario
     scenario_spec = ScenarioSpec(
-        class_name="helm.benchmark.scenarios.headqa.HeadQAScenario",
-        args={},
+        class_name="helm.benchmark.scenarios.headqa_scenario.HeadQAScenario",
+        args={"language": language, "category": category},
     )
 
     # Define the adapter
@@ -34,11 +38,8 @@ def get_head_qa_run_spec() -> RunSpec:
             "You are a highly knowledgeable AI assistant specializing in biomedical sciences. Your task is to answer "
             "multiple-choice questions accurately based on the options provided. Each question will relate to biomedical concepts, "
             "and you will be asked to choose the most appropriate answer.\n\n"
-            "For each question, you must:\n"
-            "- Select the correct answer index (e.g., 1 for A, 2 for B, 3 for C, etc).\n"
-            "- Provide the actual answer corresponding to the selected option.\n\n"
             "Please think step-by-step to solve the question and then generate your final answer. "
-            'Before giving the final answer, write "Final Answer: " followed by the answer index and the answer text.'
+            'Before giving the final answer, write "Final Answer: " followed by the corresponding answer alternative.'
         ),
         input_noun="Question",
         output_noun="Answer",
@@ -49,7 +50,7 @@ def get_head_qa_run_spec() -> RunSpec:
 
     # Return the RunSpec
     return RunSpec(
-        name="head_qa",
+        name=f"head_qa:language={language},category={category}",
         scenario_spec=scenario_spec,
         adapter_spec=adapter_spec,
         metric_specs=metric_specs,
@@ -88,7 +89,7 @@ def get_medbullets_run_spec() -> RunSpec:
 
     # Define the metrics
     # get_exact_match_metric_specs - multiple choice exact match (accuracy)
-    metric_specs = get_exact_match_metric_specs()
+    metric_specs = get_exact_match_metric_specs() + get_generic_metric_specs()
 
     # Return the RunSpec
     return RunSpec(

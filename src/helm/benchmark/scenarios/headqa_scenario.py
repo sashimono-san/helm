@@ -1,17 +1,19 @@
-import json
 import os
-from typing import List
+from typing import List, Union
+
+from datasets import DatasetDict, load_dataset
+
 from helm.benchmark.scenarios.scenario import (
-    Scenario,
-    Instance,
-    Reference,
     CORRECT_TAG,
-    TRAIN_SPLIT,
     TEST_SPLIT,
+    TRAIN_SPLIT,
     Input,
+    Instance,
     Output,
+    Reference,
+    Scenario,
 )
-from helm.common.general import ensure_file_downloaded
+from helm.common.general import ensure_directory_exists
 
 
 class HeadQAScenario(Scenario):
@@ -51,67 +53,81 @@ class HeadQAScenario(Scenario):
     `ra` field in the dataset. The dataset spans six healthcare domains and is challenging even for experts.
     """
 
-    DATASET_DOWNLOAD_URL: str = (
-        "https://github.com/HEAD-QA/dataset/raw/main/HEAD-QA.json"
-    )
+    HUGGING_FACE_DATASET_PATH: str = "dvilares/head_qa"
+    SKIP_VQA: bool = True
+    SKIP_TEXTQA: bool = False
 
     name = "head_qa"
-    description = "A multi-choice QA dataset from Spanish healthcare specialization exams."
-    tags = ["question_answering", "biomedical"]
+    description = (
+        "A multi-choice QA dataset from Spanish healthcare specialization exams."
+    )
+    tags = ["question_answering", "biomedical", "medicine"]
+
+    def __init__(self, language: str = "en", category: Union[str, None] = None):
+        """Initialize the HEAD-QA scenario.
+        
+        Args:
+            language (str, optional): Language of the dataset. Defaults to "en".
+            category (str, optional): Category of the dataset. If None, all categories are used.
+        """
+        super().__init__()
+        self.language: str = language
+        self.category: str = category
+        assert (
+            self.SKIP_VQA or self.SKIP_TEXTQA
+        ), "Failed to initialize HeadQAScenario, one of `SKIP_VQA` or `SKIP_TEXTQA` must be True."
 
     def get_instances(self, output_path: str) -> List[Instance]:
-        """
-        Reads the HEAD-QA dataset from the provided JSON file, processes each exam's questions and answers, and
-        constructs instances for LLM evaluation.
-
-        :param output_path: Path to save the downloaded JSON file.
-        :return: A list of Instance objects containing the question, answers, correct answer, and the split type.
-        """
-        # Ensure the JSON file is downloaded
-        json_path = os.path.join(output_path, "head_qa.json")
-        ensure_file_downloaded(
-            source_url=self.DATASET_DOWNLOAD_URL,
-            target_path=json_path,
-            unpack=False,
+        data_path: str = os.path.join(output_path, "data")
+        ensure_directory_exists(data_path)
+        dataset: DatasetDict = load_dataset(
+            self.HUGGING_FACE_DATASET_PATH, self.language
         )
 
+        # XXX: Should we consider validation as test too?
+        splits = {TRAIN_SPLIT: ["train", "validation"], TEST_SPLIT: ["test"]}
         instances: List[Instance] = []
+        for (
+            helm_split_name,
+            dataset_splits_name,
+        ) in splits.items():  # Iterate over the splits
+            for dataset_split_name in dataset_splits_name:
+                split_data = dataset[dataset_split_name]
 
-        # Load the JSON file
-        with open(json_path, "r", encoding="utf-8") as json_file:
-            data = json.load(json_file)
+                for example in split_data:
+                    # Whether to process Visual Question Answering (VQA) examples
+                    if self.SKIP_VQA and example["image"] is not None:
+                        continue
 
-        # Process each exam
-        for exam_name, exam_data in data["exams"].items():
-            for question_data in exam_data["data"]:
-                question = question_data["qtext"]
-                correct_answer_idx = question_data["ra"]  # Real answer index as a string
-                answers = question_data["answers"]
+                    # Whether to process Text Question Answering (TextQA) examples
+                    if self.SKIP_TEXTQA and example["image"] is None:
+                        continue
 
-                # Build the options as a formatted string
-                options_str = "\n".join(
-                    [f"{chr(65 + answer['aid'] - 1)}) {answer['atext']}" for answer in answers]
-                )
+                    # If specified, filter by category
+                    if self.category is not None:
+                        if example["category"] != self.category:
+                            continue
 
-                # Prepare the input text
-                input_text = f"{question}\n\n{options_str}\n\nWhat is the correct answer?"
+                    question = example["qtext"]
 
-                # Create references for each answer option
-                references = [
-                    Reference(
-                        Output(text=answer["atext"]),
-                        tags=[CORRECT_TAG] if str(answer["aid"]) == correct_answer_idx else [],
+                    # Format the final answer with explanation
+                    instances.append(
+                        Instance(
+                            input=Input(text=question),
+                            references=[
+                                Reference(
+                                    Output(text=option["atext"]),
+                                    tags=[CORRECT_TAG] if option["aid"] == example["ra"] else [],
+                                ) for option in example["answers"]
+                            ],
+                            split=helm_split_name,
+                            extra_data={
+                                "id": example["qid"],
+                                "name": example["name"],
+                                "category": example["category"],
+                                "year": example["year"],
+                            },
+                        )
                     )
-                    for answer in answers
-                ]
-
-                # Create an instance
-                instance = Instance(
-                    input=Input(text=input_text),
-                    references=references,
-                    split=TEST_SPLIT, 
-                )
-
-                instances.append(instance)
 
         return instances
