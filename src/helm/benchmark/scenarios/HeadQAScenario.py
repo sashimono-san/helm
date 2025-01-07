@@ -7,6 +7,7 @@ from helm.benchmark.scenarios.scenario import (
     Reference,
     CORRECT_TAG,
     TRAIN_SPLIT,
+    TEST_SPLIT,
     Input,
     Output,
 )
@@ -108,7 +109,7 @@ class HeadQAScenario(Scenario):
                 instance = Instance(
                     input=Input(text=input_text),
                     references=references,
-                    split=TRAIN_SPLIT,  # Assuming all data is training data for now
+                    split=TEST_SPLIT, 
                 )
 
                 instances.append(instance)
