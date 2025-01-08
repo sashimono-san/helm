@@ -67,32 +67,36 @@ class MedecScenario(Scenario):
 
             for row in reader:
                 # Validate required fields
-                if not row.get("Scenario") or not row.get("ErrorType"):
+                if not row.get("Text") or not row.get("Error Type"):
                     continue
 
-                # Build input text (Scenario or question)
-                input_text = row["Scenario"]
+                # Build input text (entire clinical note)
+                input_text = row["Text"].strip()
 
-                # Parse error types (options) and correct answer
-                error_types = [et.strip() for et in row["ErrorOptions"].split(";")]
-                correct_error = row["ErrorType"].strip()
+                # Parse error-related fields
+                error_flag = int(row.get("Error Flag", 0))
+                error_type = row["Error Type"].strip()
+                error_sentence_id = int(row.get("Error Sentence ID", -1))
+                corrected_sentence = row.get("Corrected Sentence", "").strip()
 
-                # Create references for each error type
-                references = [
-                    Reference(
-                        Output(text=error_type),
-                        tags=[CORRECT_TAG] if error_type == correct_error else [],
+                # Create references for correction task
+                references = []
+                if error_flag == 1 and error_sentence_id != -1:
+                    references.append(
+                        Reference(
+                            Output(text=corrected_sentence),
+                            tags=[CORRECT_TAG],
+                        )
                     )
-                    for error_type in error_types
-                ]
 
-                # Create instance
+                # Create an instance for the error detection and correction task
                 instance = Instance(
                     input=Input(text=input_text),
                     references=references,
                     split=split,
                 )
                 instances.append(instance)
+
         return instances
 
     def get_instances(self, output_path: str) -> List[Instance]:
@@ -108,3 +112,4 @@ class MedecScenario(Scenario):
         instances.extend(self.process_csv(test_csv, TEST_SPLIT))
 
         return instances
+
