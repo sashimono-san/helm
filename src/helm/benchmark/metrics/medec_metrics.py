@@ -26,22 +26,42 @@ class MedecMetric(Metric):
         """
         Evaluate a single generation against the reference labels.
         """
-        assert request_state.instance.extra_data, (
-            "Could not find `extra_data` in the request state. "
-            "Both `ground_truth_flag` and `ground_truth_sentence` are required for this metric."
-        )
+        # Debugging output
+        print(f"Current completions: {request_state.result.completions}")
 
         # Extract predictions
-        assert len(request_state.result.completions) == 1, (
-            f"Found a total of {len(request_state.result.completions)} completions. "
-            "Only one was expected."
+        predictions = [
+            completion.text.strip() for completion in request_state.result.completions
+        ]
+
+        if not predictions:
+            raise ValueError("No predictions found in the completions.")
+
+        # Process the first prediction as the primary output
+        prediction = predictions[0]
+
+        # Try to get references from the instance
+        references = getattr(request_state.instance, "references", None)
+        if not references or len(references) == 0:
+            # If references are missing, log and skip evaluation for this instance
+            print(f"Warning: Missing references for instance {request_state.instance}")
+            return []
+
+        # The ground truth is the first reference with a CORRECT_TAG
+        ground_truth_reference = next(
+            (ref for ref in references if "CORRECT_TAG" in ref.tags), None
         )
+        if not ground_truth_reference:
+            print(f"Warning: No ground truth reference with CORRECT_TAG for instance {request_state.instance}")
+            return []
 
-        prediction = request_state.result.completions[0].text.strip()
-
-        # Extract ground truth data
-        ground_truth_flag = request_state.instance.extra_data.get("ground_truth_flag", 0)
-        ground_truth_sentence = request_state.instance.extra_data.get("ground_truth_sentence", -1)
+        # Ground truth flag and sentence
+        ground_truth_flag = 1 if ground_truth_reference.output.text else 0
+        ground_truth_sentence = (
+            int(ground_truth_reference.output.text.split()[0])
+            if ground_truth_flag
+            else -1
+        )
 
         # Process prediction
         if prediction.startswith("CORRECT"):
@@ -77,3 +97,4 @@ class MedecMetric(Metric):
             "medec_error_flag_accuracy": total_flag_accuracy / count if count > 0 else 0.0,
             "medec_error_sentence_accuracy": total_sentence_accuracy / count if count > 0 else 0.0,
         }
+
