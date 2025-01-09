@@ -179,7 +179,6 @@ def get_aci_bench_run_spec() -> RunSpec:
         groups=["clinical", "aci_bench"],
     )
 
-
 @run_spec_function("medec")
 def get_medec_run_spec() -> RunSpec:
     """
@@ -201,11 +200,12 @@ def get_medec_run_spec() -> RunSpec:
             "If the text is correct return the following output: CORRECT. If the text has a medical error, return the "
             "sentence ID of the sentence containing the error, followed by a space, and a corrected version of the sentence."
         ),
-        max_tokens=5000,  # Limit token count to ensure concise output
+        #max_tokens=2000,  # Limit token count to ensure concise output
         input_noun="Conversation",
         output_noun="Clinical Note",
-        max_train_instances = 10,
-        num_outputs = 10
+        max_train_instances = 2,
+        num_outputs = 2
+        #temperature=0.7,  # Allow for slight variability in generation
     )
 
     # Define the metrics
