@@ -159,11 +159,10 @@ def get_aci_bench_run_spec() -> RunSpec:
             "2. PHYSICAL EXAM\n"
             "3. RESULTS\n"
             "4. ASSESSMENT AND PLAN\n\n"
+            "The conversation is:"
         ),
-        max_tokens=5000,  # Limit token count to ensure concise output
         input_noun="Conversation",
         output_noun="Clinical Note",
-        temperature=0.7,  # Allow for slight variability in generation
     )
 
     # Define the metrics
