@@ -1,4 +1,4 @@
-import csv
+import json
 import os
 from typing import List
 from helm.benchmark.scenarios.scenario import (
@@ -7,6 +7,7 @@ from helm.benchmark.scenarios.scenario import (
     Reference,
     CORRECT_TAG,
     TRAIN_SPLIT,
+    TEST_SPLIT,
     Input,
     Output,
 )
@@ -58,54 +59,57 @@ class ACIBenchScenario(Scenario):
     Given a doctor-patient dialogue, models must generate a clinical note that summarizes the conversation,
     focusing on the chief complaint, history of present illness, and other relevant clinical information.
     """
-
-    DATASET_DOWNLOAD_URL: str = (
-        "https://github.com/wyim/aci-bench/raw/main/data/challenge_data/valid.csv"
-    )
+    TRAIN_URL = "https://raw.githubusercontent.com/wyim/aci-bench/refs/heads/main/data/challenge_data_json/train_full.json"
+    TEST_URLS = [
+        "https://raw.githubusercontent.com/wyim/aci-bench/refs/heads/main/data/challenge_data_json/clinicalnlp_taskB_test1_full.json",
+        "https://raw.githubusercontent.com/wyim/aci-bench/refs/heads/main/data/challenge_data_json/clef_taskC_test3_full.json",
+        "https://raw.githubusercontent.com/wyim/aci-bench/refs/heads/main/data/challenge_data_json/clinicalnlp_taskC_test2_full.json",
+    ]
 
     name = "aci_bench"
-    description = (
-        "The Ambient Clinical Intelligence Benchmark (ACI Bench) corpus evaluates the task of "
-        "generating medical notes from doctor-patient dialogue."
-    )
+    description = "The ACI-Bench dataset evaluates the task of generating medical notes from doctor-patient dialogue."
     tags = ["summarization", "medicine"]
 
-    def get_instances(self, output_path: str) -> List[Instance]:
-        """
-        Reads the ACI-Bench dataset from the provided CSV file, processes each dialogue-note pair, and
-        creates instances for evaluation. The task involves summarizing the dialogue into a clinical note.
+    def download_json(self, url: str, output_path: str, file_name: str) -> str:
+        """Download the JSON file and save it to the specified path."""
+        json_path = os.path.join(output_path, file_name)
+        ensure_file_downloaded(source_url=url, target_path=json_path, unpack=False)
+        return json_path
 
-        :param output_path: Path to save the downloaded CSV file.
-        :return: A list of Instance objects containing the dialogue, ground truth note, and the split type.
-        """
-        # Ensure the CSV file is downloaded
-        csv_path = os.path.join(output_path, "aci_bench_valid.csv")
-        ensure_file_downloaded(
-            source_url=self.DATASET_DOWNLOAD_URL,
-            target_path=csv_path,
-            unpack=False,
-        )
-
+    def process_json(self, json_path: str, split: str) -> List[Instance]:
+        """Read and process the JSON file to generate instances."""
         instances: List[Instance] = []
+        with open(json_path, "r", encoding="utf-8") as json_file:
+            data = json.load(json_file)
 
-        # Read the CSV file and process each row
-        with open(csv_path, "r", encoding="utf-8") as csv_file:
-            reader = csv.DictReader(csv_file)
-
-            for row in reader:
-                dialogue = row["dialogue"]
-                note = row["note"]
+            for entry in data["data"]:
+                dialogue = entry["src"]
+                note = entry["tgt"]
 
                 # Prepare the input text (dialogue)
-                input_text = f"Summarize the following doctor-patient dialogue into a clinical note:\n\n{dialogue}"
+                input_text = f"Doctor-patient dialogue:\n\n{dialogue}"
 
-                # Create an instance with the ground truth (note)
+                # Create an instance
                 instance = Instance(
                     input=Input(text=input_text),
                     references=[Reference(Output(text=note), tags=[CORRECT_TAG])],
-                    split=TRAIN_SPLIT,  # Assuming this dataset is for training
+                    split=split,
                 )
-
                 instances.append(instance)
+
+        return instances
+
+    def get_instances(self, output_path: str) -> List[Instance]:
+        """Download and process the dataset to generate instances."""
+        instances: List[Instance] = []
+
+        # Process training set
+        train_json = self.download_json(self.TRAIN_URL, output_path, "aci_bench_train.json")
+        instances.extend(self.process_json(train_json, TRAIN_SPLIT))
+
+        # Process test sets
+        for idx, test_url in enumerate(self.TEST_URLS, start=1):
+            test_json = self.download_json(test_url, output_path, f"aci_bench_test_{idx}.json")
+            instances.extend(self.process_json(test_json, TEST_SPLIT))
 
         return instances
